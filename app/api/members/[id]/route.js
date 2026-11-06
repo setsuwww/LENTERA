@@ -159,22 +159,41 @@ export async function PATCH(request, { params }) {
 }
 
 // DELETE: Menghapus anggota
+
 export async function DELETE(request, { params }) {
-  const { response } = await authorizeLibraryStaff();
-
-  if (response) return response;
-
   try {
+    const { response } = await authorizeLibraryStaff();
+    if (response) return response;
+
     const { id } = await params;
 
-    const existingMember = await prisma.member.findUnique({
+    const member = await prisma.member.findUnique({
       where: { id },
+      include: {
+        _count: {
+          select: {
+            transactions: true,
+          },
+        },
+      },
     });
 
-    if (!existingMember) {
-      return NextResponse.json(
+    if (!member) {
+      return Response.json(
         { message: "Member not found." },
         { status: 404 }
+      );
+    }
+
+    // Jika punya riwayat transaksi, jangan hapus.
+    if (member._count.transactions > 0) {
+      return Response.json(
+        {
+          message:
+            "Member has transaction history. Change member status to Inactive instead.",
+          code: "MEMBER_HAS_HISTORY",
+        },
+        { status: 409 }
       );
     }
 
@@ -182,13 +201,13 @@ export async function DELETE(request, { params }) {
       where: { id },
     });
 
-    return NextResponse.json({
+    return Response.json({
       message: "Member deleted successfully.",
     });
   } catch (error) {
-    console.error("DELETE member error:", error);
+    console.error("DELETE MEMBER ERROR:", error);
 
-    return NextResponse.json(
+    return Response.json(
       { message: "Failed to delete member." },
       { status: 500 }
     );
